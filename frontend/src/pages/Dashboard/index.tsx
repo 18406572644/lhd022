@@ -182,6 +182,12 @@ function Dashboard() {
       value: overview?.pendingRepairs || 0,
       icon: <WarningOutlined />,
       className: 'stat-card-error'
+    },
+    {
+      title: '低库存预警',
+      value: overview?.lowStockDevices || 0,
+      icon: <WarningOutlined />,
+      className: 'stat-card-error'
     }
   ]
 

@@ -1,7 +1,7 @@
 import type { Point, Device, Repair, Restock, Order, Inventory, Region, PageResult, PageParams } from '../types'
 import { mockPoints, mockDevices, mockRepairs, mockRestocks, mockOrders, mockInventory, mockRegions, mockStatistics } from './data'
 
-const USE_MOCK = true
+const USE_MOCK = false
 
 function delay<T>(data: T, ms = 300): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(data), ms))

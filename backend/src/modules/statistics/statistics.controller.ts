@@ -16,11 +16,37 @@ export class StatisticsController {
     return this.statisticsService.getDashboard();
   }
 
+  @Get('overview')
+  @ApiOperation({ summary: '获取概览数据（兼容前端）' })
+  getOverview() {
+    return this.statisticsService.getDashboard();
+  }
+
   @Get('trend')
   @ApiOperation({ summary: '获取趋势数据' })
   @ApiQuery({ name: 'days', required: false, description: '天数，默认7天' })
   getTrend(@Query('days') days?: string) {
     const daysNum = days ? parseInt(days) : 7;
     return this.statisticsService.getTrend(daysNum);
+  }
+
+  @Get('order-trend')
+  @ApiOperation({ summary: '获取订单趋势（兼容前端）' })
+  @ApiQuery({ name: 'days', required: false, description: '天数，默认7天' })
+  getOrderTrend(@Query('days') days?: string) {
+    const daysNum = days ? parseInt(days) : 7;
+    return this.statisticsService.getTrend(daysNum);
+  }
+
+  @Get('device-status')
+  @ApiOperation({ summary: '获取设备状态分布' })
+  getDeviceStatus() {
+    return this.statisticsService.getDeviceStatus();
+  }
+
+  @Get('region-data')
+  @ApiOperation({ summary: '获取区域数据对比' })
+  getRegionData() {
+    return this.statisticsService.getRegionData();
   }
 }
