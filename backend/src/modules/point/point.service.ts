@@ -1,14 +1,21 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { db, Point } from '@/common/database/in-memory-db';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Point } from '@/entities/point.entity';
 import { CreatePointDto } from './dto/create-point.dto';
 import { UpdatePointDto } from './dto/update-point.dto';
 import { PaginationDto, PaginationResultDto } from '@/common/dto/pagination.dto';
 import { ExcelUtil } from '@/common/utils/excel.util';
+import { QueryUtil } from '@/common/utils/query.util';
 
 @Injectable()
 export class PointService {
+  constructor(
+    @InjectRepository(Point) private pointRepository: Repository<Point>,
+  ) {}
+
   async create(createPointDto: CreatePointDto): Promise<Point> {
-    return db.addPoint({
+    const pointData = {
       ...createPointDto,
       longitude: createPointDto.longitude || 0,
       latitude: createPointDto.latitude || 0,
@@ -16,55 +23,21 @@ export class PointService {
       phone: createPointDto.phone || '',
       status: createPointDto.status || 'active',
       images: createPointDto.images || [],
-    });
+    };
+    const point = this.pointRepository.create(pointData);
+    return this.pointRepository.save(point);
   }
 
   async findAll(paginationDto: PaginationDto): Promise<PaginationResultDto<Point>> {
-    const { page = 1, pageSize = 10, keyword, regionId, status, startTime, endTime } = paginationDto;
-
-    let data = [...db.getPoints()];
-
-    if (keyword) {
-      const kw = keyword.toLowerCase();
-      data = data.filter(
-        (item) =>
-          item.name.toLowerCase().includes(kw) ||
-          item.address.toLowerCase().includes(kw) ||
-          item.manager.toLowerCase().includes(kw) ||
-          item.phone.toLowerCase().includes(kw),
-      );
-    }
-
-    if (regionId !== undefined) {
-      data = data.filter((item) => item.regionId === Number(regionId));
-    }
-
-    if (status) {
-      data = data.filter((item) => item.status === status);
-    }
-
-    if (startTime) {
-      const start = new Date(startTime);
-      data = data.filter((item) => new Date(item.createdAt) >= start);
-    }
-
-    if (endTime) {
-      const end = new Date(endTime);
-      end.setHours(23, 59, 59, 999);
-      data = data.filter((item) => new Date(item.createdAt) <= end);
-    }
-
-    data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    const total = data.length;
-    const skip = (page - 1) * pageSize;
-    const list = data.slice(skip, skip + pageSize);
-
-    return { list, total, page, pageSize };
+    return QueryUtil.findWithPagination<Point>(
+      this.pointRepository,
+      paginationDto,
+      ['name', 'address', 'manager', 'phone'],
+    );
   }
 
   async findOne(id: number): Promise<Point> {
-    const point = db.getPoints().find((p) => p.id === id);
+    const point = await this.pointRepository.findOne({ where: { id } });
     if (!point) {
       throw new NotFoundException('点位不存在');
     }
@@ -73,13 +46,13 @@ export class PointService {
 
   async update(id: number, updatePointDto: UpdatePointDto): Promise<Point> {
     const point = await this.findOne(id);
-    const updated = db.updatePoint(id, updatePointDto);
-    return updated;
+    await this.pointRepository.update(id, updatePointDto);
+    return this.pointRepository.findOne({ where: { id } }) as Promise<Point>;
   }
 
   async remove(id: number): Promise<void> {
-    const success = db.deletePoint(id);
-    if (!success) {
+    const result = await this.pointRepository.delete(id);
+    if (result.affected === 0) {
       throw new NotFoundException('点位不存在');
     }
   }
@@ -112,9 +85,9 @@ export class PointService {
   }
 
   async export(): Promise<Buffer> {
-    const points = [...db.getPoints()].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
+    const points = await this.pointRepository.find({
+      order: { createdAt: 'DESC' },
+    });
     const exportData = points.map((point) => ({
       ID: point.id,
       点位名称: point.name,

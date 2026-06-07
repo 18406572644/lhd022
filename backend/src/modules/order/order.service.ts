@@ -1,12 +1,21 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { db, Order } from '@/common/database/in-memory-db';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Order } from '@/entities/order.entity';
+import { Point } from '@/entities/point.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { PaginationDto, PaginationResultDto } from '@/common/dto/pagination.dto';
 import { ExcelUtil } from '@/common/utils/excel.util';
+import { QueryUtil } from '@/common/utils/query.util';
 
 @Injectable()
 export class OrderService {
+  constructor(
+    @InjectRepository(Order) private orderRepository: Repository<Order>,
+    @InjectRepository(Point) private pointRepository: Repository<Point>,
+  ) {}
+
   async create(createOrderDto: CreateOrderDto): Promise<Order> {
     const orderNo = ExcelUtil.generateNo('DD');
     const orderData = {
@@ -18,55 +27,47 @@ export class OrderService {
       rentTime: new Date(createOrderDto.rentTime),
       returnTime: createOrderDto.returnTime ? new Date(createOrderDto.returnTime) : null,
     };
-    return db.addOrder(orderData);
+    const order = this.orderRepository.create(orderData);
+    return this.orderRepository.save(order);
   }
 
   async findAll(paginationDto: PaginationDto): Promise<PaginationResultDto<Order>> {
-    const { page = 1, pageSize = 10, keyword, regionId, status, startTime, endTime } = paginationDto;
-
-    let data = [...db.getOrders()];
-
-    if (keyword) {
-      const kw = keyword.toLowerCase();
-      data = data.filter(
-        (item) =>
-          item.orderNo.toLowerCase().includes(kw) ||
-          item.userId.toLowerCase().includes(kw) ||
-          item.type.toLowerCase().includes(kw),
-      );
-    }
+    const { regionId } = paginationDto;
 
     if (regionId !== undefined) {
-      const points = db.getPoints().filter((p) => p.regionId === Number(regionId)).map((p) => p.id);
-      data = data.filter((item) => points.includes(item.pointId));
+      const points = await this.pointRepository.find({
+        where: { regionId: Number(regionId) },
+        select: ['id'],
+      });
+      const pointIds = points.map((p) => p.id);
+
+      const modifiedPaginationDto = { ...paginationDto, regionId: undefined };
+      const result = await QueryUtil.findWithPagination<Order>(
+        this.orderRepository,
+        modifiedPaginationDto,
+        ['orderNo', 'userId', 'type'],
+      );
+
+      const filteredList = result.list.filter((item) => pointIds.includes(item.pointId));
+      const filteredTotal = filteredList.length;
+
+      return {
+        list: filteredList,
+        total: filteredTotal,
+        page: paginationDto.page,
+        pageSize: paginationDto.pageSize,
+      };
     }
 
-    if (status) {
-      data = data.filter((item) => item.status === status);
-    }
-
-    if (startTime) {
-      const start = new Date(startTime);
-      data = data.filter((item) => new Date(item.createdAt) >= start);
-    }
-
-    if (endTime) {
-      const end = new Date(endTime);
-      end.setHours(23, 59, 59, 999);
-      data = data.filter((item) => new Date(item.createdAt) <= end);
-    }
-
-    data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    const total = data.length;
-    const skip = (page - 1) * pageSize;
-    const list = data.slice(skip, skip + pageSize);
-
-    return { list, total, page, pageSize };
+    return QueryUtil.findWithPagination<Order>(
+      this.orderRepository,
+      paginationDto,
+      ['orderNo', 'userId', 'type'],
+    );
   }
 
   async findOne(id: number): Promise<Order> {
-    const order = db.getOrders().find((o) => o.id === id);
+    const order = await this.orderRepository.findOne({ where: { id } });
     if (!order) {
       throw new NotFoundException('订单不存在');
     }
@@ -82,8 +83,8 @@ export class OrderService {
     if (updateOrderDto.returnTime !== undefined) {
       updateData.returnTime = updateOrderDto.returnTime ? new Date(updateOrderDto.returnTime) : null;
     }
-    Object.assign(order, updateData);
-    return order;
+    await this.orderRepository.update(id, updateData);
+    return this.orderRepository.findOne({ where: { id } }) as Promise<Order>;
   }
 
   async remove(id: number): Promise<void> {
@@ -119,9 +120,9 @@ export class OrderService {
   }
 
   async export(): Promise<Buffer> {
-    const orders = [...db.getOrders()].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
+    const orders = await this.orderRepository.find({
+      order: { createdAt: 'DESC' },
+    });
     const exportData = orders.map((order) => ({
       ID: order.id,
       订单号: order.orderNo,

@@ -1,12 +1,21 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { db, Inventory } from '@/common/database/in-memory-db';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Inventory } from '@/entities/inventory.entity';
+import { Point } from '@/entities/point.entity';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
 import { UpdateInventoryDto } from './dto/update-inventory.dto';
 import { PaginationDto, PaginationResultDto } from '@/common/dto/pagination.dto';
 import { ExcelUtil } from '@/common/utils/excel.util';
+import { QueryUtil } from '@/common/utils/query.util';
 
 @Injectable()
 export class InventoryService {
+  constructor(
+    @InjectRepository(Inventory) private inventoryRepository: Repository<Inventory>,
+    @InjectRepository(Point) private pointRepository: Repository<Point>,
+  ) {}
+
   async create(createInventoryDto: CreateInventoryDto): Promise<Inventory> {
     const inventoryNo = ExcelUtil.generateNo('PD');
     const inventoryData = {
@@ -17,55 +26,47 @@ export class InventoryService {
       status: createInventoryDto.status || 'pending',
       images: createInventoryDto.images || [],
     };
-    return db.addInventory(inventoryData);
+    const inventory = this.inventoryRepository.create(inventoryData);
+    return this.inventoryRepository.save(inventory);
   }
 
   async findAll(paginationDto: PaginationDto): Promise<PaginationResultDto<Inventory>> {
-    const { page = 1, pageSize = 10, keyword, regionId, status, startTime, endTime } = paginationDto;
-
-    let data = [...db.getInventory()];
-
-    if (keyword) {
-      const kw = keyword.toLowerCase();
-      data = data.filter(
-        (item) =>
-          item.inventoryNo.toLowerCase().includes(kw) ||
-          item.lossType.toLowerCase().includes(kw) ||
-          item.handler.toLowerCase().includes(kw),
-      );
-    }
+    const { regionId } = paginationDto;
 
     if (regionId !== undefined) {
-      const points = db.getPoints().filter((p) => p.regionId === Number(regionId)).map((p) => p.id);
-      data = data.filter((item) => points.includes(item.pointId));
+      const points = await this.pointRepository.find({
+        where: { regionId: Number(regionId) },
+        select: ['id'],
+      });
+      const pointIds = points.map((p) => p.id);
+
+      const modifiedPaginationDto = { ...paginationDto, regionId: undefined };
+      const result = await QueryUtil.findWithPagination<Inventory>(
+        this.inventoryRepository,
+        modifiedPaginationDto,
+        ['inventoryNo', 'lossType', 'handler'],
+      );
+
+      const filteredList = result.list.filter((item) => pointIds.includes(item.pointId));
+      const filteredTotal = filteredList.length;
+
+      return {
+        list: filteredList,
+        total: filteredTotal,
+        page: paginationDto.page,
+        pageSize: paginationDto.pageSize,
+      };
     }
 
-    if (status) {
-      data = data.filter((item) => item.status === status);
-    }
-
-    if (startTime) {
-      const start = new Date(startTime);
-      data = data.filter((item) => new Date(item.createdAt) >= start);
-    }
-
-    if (endTime) {
-      const end = new Date(endTime);
-      end.setHours(23, 59, 59, 999);
-      data = data.filter((item) => new Date(item.createdAt) <= end);
-    }
-
-    data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    const total = data.length;
-    const skip = (page - 1) * pageSize;
-    const list = data.slice(skip, skip + pageSize);
-
-    return { list, total, page, pageSize };
+    return QueryUtil.findWithPagination<Inventory>(
+      this.inventoryRepository,
+      paginationDto,
+      ['inventoryNo', 'lossType', 'handler'],
+    );
   }
 
   async findOne(id: number): Promise<Inventory> {
-    const inventory = db.getInventory().find((i) => i.id === id);
+    const inventory = await this.inventoryRepository.findOne({ where: { id } });
     if (!inventory) {
       throw new NotFoundException('盘点单不存在');
     }
@@ -74,8 +75,8 @@ export class InventoryService {
 
   async update(id: number, updateInventoryDto: UpdateInventoryDto): Promise<Inventory> {
     const inventory = await this.findOne(id);
-    const updated = db.updateInventory(id, updateInventoryDto);
-    return updated;
+    await this.inventoryRepository.update(id, updateInventoryDto);
+    return this.inventoryRepository.findOne({ where: { id } }) as Promise<Inventory>;
   }
 
   async remove(id: number): Promise<void> {
@@ -109,9 +110,9 @@ export class InventoryService {
   }
 
   async export(): Promise<Buffer> {
-    const inventoryItems = [...db.getInventory()].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
+    const inventoryItems = await this.inventoryRepository.find({
+      order: { createdAt: 'DESC' },
+    });
     const exportData = inventoryItems.map((inventory) => ({
       ID: inventory.id,
       盘点单号: inventory.inventoryNo,

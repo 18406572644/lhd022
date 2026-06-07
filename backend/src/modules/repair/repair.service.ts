@@ -1,12 +1,21 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { db, Repair } from '@/common/database/in-memory-db';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Repair } from '@/entities/repair.entity';
+import { Point } from '@/entities/point.entity';
 import { CreateRepairDto } from './dto/create-repair.dto';
 import { UpdateRepairDto } from './dto/update-repair.dto';
 import { PaginationDto, PaginationResultDto } from '@/common/dto/pagination.dto';
 import { ExcelUtil } from '@/common/utils/excel.util';
+import { QueryUtil } from '@/common/utils/query.util';
 
 @Injectable()
 export class RepairService {
+  constructor(
+    @InjectRepository(Repair) private repairRepository: Repository<Repair>,
+    @InjectRepository(Point) private pointRepository: Repository<Point>,
+  ) {}
+
   async create(createRepairDto: CreateRepairDto): Promise<Repair> {
     const repairNo = ExcelUtil.generateNo('BX');
     const repairData = {
@@ -21,56 +30,47 @@ export class RepairService {
       resolveTime: createRepairDto.resolveTime ? new Date(createRepairDto.resolveTime) : null,
       images: createRepairDto.images || [],
     };
-    return db.addRepair(repairData);
+    const repair = this.repairRepository.create(repairData);
+    return this.repairRepository.save(repair);
   }
 
   async findAll(paginationDto: PaginationDto): Promise<PaginationResultDto<Repair>> {
-    const { page = 1, pageSize = 10, keyword, regionId, status, startTime, endTime } = paginationDto;
-
-    let data = [...db.getRepairs()];
-
-    if (keyword) {
-      const kw = keyword.toLowerCase();
-      data = data.filter(
-        (item) =>
-          item.repairNo.toLowerCase().includes(kw) ||
-          item.faultType.toLowerCase().includes(kw) ||
-          item.reporter.toLowerCase().includes(kw) ||
-          item.handler.toLowerCase().includes(kw),
-      );
-    }
+    const { regionId } = paginationDto;
 
     if (regionId !== undefined) {
-      const points = db.getPoints().filter((p) => p.regionId === Number(regionId)).map((p) => p.id);
-      data = data.filter((item) => points.includes(item.pointId));
+      const points = await this.pointRepository.find({
+        where: { regionId: Number(regionId) },
+        select: ['id'],
+      });
+      const pointIds = points.map((p) => p.id);
+
+      const modifiedPaginationDto = { ...paginationDto, regionId: undefined };
+      const result = await QueryUtil.findWithPagination<Repair>(
+        this.repairRepository,
+        modifiedPaginationDto,
+        ['repairNo', 'faultType', 'reporter', 'handler'],
+      );
+
+      const filteredList = result.list.filter((item) => pointIds.includes(item.pointId));
+      const filteredTotal = filteredList.length;
+
+      return {
+        list: filteredList,
+        total: filteredTotal,
+        page: paginationDto.page,
+        pageSize: paginationDto.pageSize,
+      };
     }
 
-    if (status) {
-      data = data.filter((item) => item.status === status);
-    }
-
-    if (startTime) {
-      const start = new Date(startTime);
-      data = data.filter((item) => new Date(item.createdAt) >= start);
-    }
-
-    if (endTime) {
-      const end = new Date(endTime);
-      end.setHours(23, 59, 59, 999);
-      data = data.filter((item) => new Date(item.createdAt) <= end);
-    }
-
-    data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    const total = data.length;
-    const skip = (page - 1) * pageSize;
-    const list = data.slice(skip, skip + pageSize);
-
-    return { list, total, page, pageSize };
+    return QueryUtil.findWithPagination<Repair>(
+      this.repairRepository,
+      paginationDto,
+      ['repairNo', 'faultType', 'reporter', 'handler'],
+    );
   }
 
   async findOne(id: number): Promise<Repair> {
-    const repair = db.getRepairs().find((r) => r.id === id);
+    const repair = await this.repairRepository.findOne({ where: { id } });
     if (!repair) {
       throw new NotFoundException('报修单不存在');
     }
@@ -86,8 +86,8 @@ export class RepairService {
     if (updateRepairDto.resolveTime !== undefined) {
       updateData.resolveTime = updateRepairDto.resolveTime ? new Date(updateRepairDto.resolveTime) : null;
     }
-    const updated = db.updateRepair(id, updateData);
-    return updated;
+    await this.repairRepository.update(id, updateData);
+    return this.repairRepository.findOne({ where: { id } }) as Promise<Repair>;
   }
 
   async remove(id: number): Promise<void> {
@@ -124,9 +124,9 @@ export class RepairService {
   }
 
   async export(): Promise<Buffer> {
-    const repairs = [...db.getRepairs()].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
+    const repairs = await this.repairRepository.find({
+      order: { createdAt: 'DESC' },
+    });
     const exportData = repairs.map((repair) => ({
       ID: repair.id,
       报修单号: repair.repairNo,

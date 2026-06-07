@@ -1,16 +1,21 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
-import { db, User } from '@/common/database/in-memory-db';
+import { User } from '@/entities/user.entity';
 import { LoginDto } from './dto/login.dto';
 
 @Injectable()
 export class AuthService {
-  constructor(private jwtService: JwtService) {}
+  constructor(
+    private jwtService: JwtService,
+    @InjectRepository(User) private userRepository: Repository<User>,
+  ) {}
 
   async login(loginDto: LoginDto) {
     const { username, password } = loginDto;
-    const user = db.getUsers().find((u) => u.username === username);
+    const user = await this.userRepository.findOne({ where: { username } });
 
     if (!user) {
       throw new UnauthorizedException('用户名或密码错误');
@@ -41,6 +46,6 @@ export class AuthService {
   }
 
   async validateUser(payload: any) {
-    return db.getUsers().find((u) => u.id === payload.id);
+    return this.userRepository.findOne({ where: { id: payload.id } });
   }
 }

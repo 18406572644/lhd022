@@ -1,12 +1,21 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { db, Restock } from '@/common/database/in-memory-db';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Restock } from '@/entities/restock.entity';
+import { Point } from '@/entities/point.entity';
 import { CreateRestockDto } from './dto/create-restock.dto';
 import { UpdateRestockDto } from './dto/update-restock.dto';
 import { PaginationDto, PaginationResultDto } from '@/common/dto/pagination.dto';
 import { ExcelUtil } from '@/common/utils/excel.util';
+import { QueryUtil } from '@/common/utils/query.util';
 
 @Injectable()
 export class RestockService {
+  constructor(
+    @InjectRepository(Restock) private restockRepository: Repository<Restock>,
+    @InjectRepository(Point) private pointRepository: Repository<Point>,
+  ) {}
+
   async create(createRestockDto: CreateRestockDto): Promise<Restock> {
     const restockNo = ExcelUtil.generateNo('BH');
     const restockData = {
@@ -16,51 +25,47 @@ export class RestockService {
       remark: createRestockDto.remark || '',
       images: createRestockDto.images || [],
     };
-    return db.addRestock(restockData);
+    const restock = this.restockRepository.create(restockData);
+    return this.restockRepository.save(restock);
   }
 
   async findAll(paginationDto: PaginationDto): Promise<PaginationResultDto<Restock>> {
-    const { page = 1, pageSize = 10, keyword, regionId, status, startTime, endTime } = paginationDto;
-
-    let data = [...db.getRestocks()];
-
-    if (keyword) {
-      const kw = keyword.toLowerCase();
-      data = data.filter(
-        (item) =>
-        item.restockNo.toLowerCase().includes(kw) ||
-          item.type.toLowerCase().includes(kw) ||
-          item.operator.toLowerCase().includes(kw),
-      );
-    }
+    const { regionId, status, ...rest } = paginationDto;
+    const modifiedPaginationDto = { ...rest, regionId: undefined, status: undefined };
 
     if (regionId !== undefined) {
-      const points = db.getPoints().filter((p) => p.regionId === Number(regionId)).map((p) => p.id);
-      data = data.filter((item) => points.includes(item.pointId));
+      const points = await this.pointRepository.find({
+        where: { regionId: Number(regionId) },
+        select: ['id'],
+      });
+      const pointIds = points.map((p) => p.id);
+
+      const result = await QueryUtil.findWithPagination<Restock>(
+        this.restockRepository,
+        modifiedPaginationDto,
+        ['restockNo', 'type', 'operator'],
+      );
+
+      const filteredList = result.list.filter((item) => pointIds.includes(item.pointId));
+      const filteredTotal = filteredList.length;
+
+      return {
+        list: filteredList,
+        total: filteredTotal,
+        page: paginationDto.page,
+        pageSize: paginationDto.pageSize,
+      };
     }
 
-    if (startTime) {
-      const start = new Date(startTime);
-      data = data.filter((item) => new Date(item.createdAt) >= start);
-    }
-
-    if (endTime) {
-      const end = new Date(endTime);
-      end.setHours(23, 59, 59, 999);
-      data = data.filter((item) => new Date(item.createdAt) <= end);
-    }
-
-    data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    const total = data.length;
-    const skip = (page - 1) * pageSize;
-    const list = data.slice(skip, skip + pageSize);
-
-    return { list, total, page, pageSize };
+    return QueryUtil.findWithPagination<Restock>(
+      this.restockRepository,
+      modifiedPaginationDto,
+      ['restockNo', 'type', 'operator'],
+    );
   }
 
   async findOne(id: number): Promise<Restock> {
-    const restock = db.getRestocks().find((r) => r.id === id);
+    const restock = await this.restockRepository.findOne({ where: { id } });
     if (!restock) {
       throw new NotFoundException('补货单不存在');
     }
@@ -69,8 +74,8 @@ export class RestockService {
 
   async update(id: number, updateRestockDto: UpdateRestockDto): Promise<Restock> {
     const restock = await this.findOne(id);
-    Object.assign(restock, updateRestockDto);
-    return restock;
+    await this.restockRepository.update(id, updateRestockDto);
+    return this.restockRepository.findOne({ where: { id } }) as Promise<Restock>;
   }
 
   async remove(id: number): Promise<void> {
@@ -105,9 +110,9 @@ export class RestockService {
   }
 
   async export(): Promise<Buffer> {
-    const restocks = [...db.getRestocks()].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
+    const restocks = await this.restockRepository.find({
+      order: { createdAt: 'DESC' },
+    });
     const exportData = restocks.map((restock) => ({
       ID: restock.id,
       补货单号: restock.restockNo,

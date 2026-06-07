@@ -1,16 +1,28 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { db, Device } from '@/common/database/in-memory-db';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, In } from 'typeorm';
+import { Device } from '@/entities/device.entity';
+import { Point } from '@/entities/point.entity';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
 import { PaginationDto, PaginationResultDto } from '@/common/dto/pagination.dto';
 import { ExcelUtil } from '@/common/utils/excel.util';
+import { QueryUtil } from '@/common/utils/query.util';
 
 @Injectable()
 export class DeviceService {
+  constructor(
+    @InjectRepository(Device) private deviceRepository: Repository<Device>,
+    @InjectRepository(Point) private pointRepository: Repository<Point>,
+  ) {}
+
   async create(createDeviceDto: CreateDeviceDto): Promise<Device> {
-    const existing = db
-      .getDevices()
-      .find((d) => d.deviceNo === createDeviceDto.deviceNo || d.snCode === createDeviceDto.snCode);
+    const existing = await this.deviceRepository.findOne({
+      where: [
+        { deviceNo: createDeviceDto.deviceNo },
+        { snCode: createDeviceDto.snCode },
+      ],
+    });
 
     if (existing) {
       throw new ConflictException('设备编号或SN码已存在');
@@ -25,55 +37,47 @@ export class DeviceService {
       rentCount: createDeviceDto.rentCount || 0,
       images: createDeviceDto.images || [],
     };
-    return db.addDevice(deviceData);
+    const device = this.deviceRepository.create(deviceData);
+    return this.deviceRepository.save(device);
   }
 
   async findAll(paginationDto: PaginationDto): Promise<PaginationResultDto<Device>> {
-    const { page = 1, pageSize = 10, keyword, regionId, status, startTime, endTime } = paginationDto;
-
-    let data = [...db.getDevices()];
-
-    if (keyword) {
-      const kw = keyword.toLowerCase();
-      data = data.filter(
-        (item) =>
-          item.deviceNo.toLowerCase().includes(kw) ||
-          item.snCode.toLowerCase().includes(kw) ||
-          item.type.toLowerCase().includes(kw),
-      );
-    }
+    const { regionId } = paginationDto;
 
     if (regionId !== undefined) {
-      const points = db.getPoints().filter((p) => p.regionId === Number(regionId)).map((p) => p.id);
-      data = data.filter((item) => points.includes(item.pointId));
+      const points = await this.pointRepository.find({
+        where: { regionId: Number(regionId) },
+        select: ['id'],
+      });
+      const pointIds = points.map((p) => p.id);
+
+      const modifiedPaginationDto = { ...paginationDto, regionId: undefined };
+      const result = await QueryUtil.findWithPagination<Device>(
+        this.deviceRepository,
+        modifiedPaginationDto,
+        ['deviceNo', 'snCode', 'type'],
+      );
+
+      const filteredList = result.list.filter((item) => pointIds.includes(item.pointId));
+      const filteredTotal = filteredList.length;
+
+      return {
+        list: filteredList,
+        total: filteredTotal,
+        page: paginationDto.page,
+        pageSize: paginationDto.pageSize,
+      };
     }
 
-    if (status) {
-      data = data.filter((item) => item.status === status);
-    }
-
-    if (startTime) {
-      const start = new Date(startTime);
-      data = data.filter((item) => new Date(item.createdAt) >= start);
-    }
-
-    if (endTime) {
-      const end = new Date(endTime);
-      end.setHours(23, 59, 59, 999);
-      data = data.filter((item) => new Date(item.createdAt) <= end);
-    }
-
-    data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    const total = data.length;
-    const skip = (page - 1) * pageSize;
-    const list = data.slice(skip, skip + pageSize);
-
-    return { list, total, page, pageSize };
+    return QueryUtil.findWithPagination<Device>(
+      this.deviceRepository,
+      paginationDto,
+      ['deviceNo', 'snCode', 'type'],
+    );
   }
 
   async findOne(id: number): Promise<Device> {
-    const device = db.getDevices().find((d) => d.id === id);
+    const device = await this.deviceRepository.findOne({ where: { id } });
     if (!device) {
       throw new NotFoundException('设备不存在');
     }
@@ -86,13 +90,13 @@ export class DeviceService {
     if (updateDeviceDto.launchTime) {
       updateData.launchTime = new Date(updateDeviceDto.launchTime);
     }
-    const updated = db.updateDevice(id, updateData);
-    return updated;
+    await this.deviceRepository.update(id, updateData);
+    return this.deviceRepository.findOne({ where: { id } }) as Promise<Device>;
   }
 
   async remove(id: number): Promise<void> {
-    const success = db.deleteDevice(id);
-    if (!success) {
+    const result = await this.deviceRepository.delete(id);
+    if (result.affected === 0) {
       throw new NotFoundException('设备不存在');
     }
   }
@@ -126,9 +130,9 @@ export class DeviceService {
   }
 
   async export(): Promise<Buffer> {
-    const devices = [...db.getDevices()].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
+    const devices = await this.deviceRepository.find({
+      order: { createdAt: 'DESC' },
+    });
     const exportData = devices.map((device) => ({
       ID: device.id,
       设备编号: device.deviceNo,

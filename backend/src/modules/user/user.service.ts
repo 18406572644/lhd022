@@ -1,14 +1,23 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, FindOptionsWhere } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
-import { db, User } from '@/common/database/in-memory-db';
+import { User } from '@/entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PaginationDto, PaginationResultDto } from '@/common/dto/pagination.dto';
+import { QueryUtil } from '@/common/utils/query.util';
 
 @Injectable()
 export class UserService {
+  constructor(
+    @InjectRepository(User) private userRepository: Repository<User>,
+  ) {}
+
   async create(createUserDto: CreateUserDto): Promise<User> {
-    const existingUser = db.getUsers().find((u) => u.username === createUserDto.username);
+    const existingUser = await this.userRepository.findOne({
+      where: { username: createUserDto.username },
+    });
 
     if (existingUser) {
       throw new ConflictException('用户名已存在');
@@ -25,56 +34,48 @@ export class UserService {
       phone: createUserDto.phone || '',
       isActive: createUserDto.isActive !== undefined ? createUserDto.isActive : true,
     };
-    const user = db.addUser(userData);
-
-    return user;
+    const user = this.userRepository.create(userData);
+    return this.userRepository.save(user);
   }
 
   async findAll(paginationDto: PaginationDto): Promise<PaginationResultDto<User>> {
-    const { page = 1, pageSize = 10, keyword, status, startTime, endTime } = paginationDto;
+    const { status } = paginationDto;
 
-    let data = [...db.getUsers()];
-
-    if (keyword) {
-      const kw = keyword.toLowerCase();
-      data = data.filter(
-        (item) =>
-          item.username.toLowerCase().includes(kw) ||
-          item.name.toLowerCase().includes(kw) ||
-          item.phone.toLowerCase().includes(kw),
-      );
-    }
+    const result = await QueryUtil.findWithPagination<User>(
+      this.userRepository,
+      paginationDto,
+      ['username', 'name', 'phone'],
+    );
 
     if (status !== undefined) {
       const isActive = status === 'true' || status === '1';
-      data = data.filter((item) => item.isActive === isActive);
+      const where = result.list[0] ? { ...(result.list[0] as any) } : {};
+      const filteredList = result.list.filter((item) => item.isActive === isActive);
+      const filteredTotal = filteredList.length;
+      return {
+        list: filteredList.map((user) => {
+          delete (user as any).password;
+          return user;
+        }),
+        total: filteredTotal,
+        page: paginationDto.page,
+        pageSize: paginationDto.pageSize,
+      };
     }
 
-    if (startTime) {
-      const start = new Date(startTime);
-      data = data.filter((item) => new Date(item.createdAt) >= start);
-    }
-
-    if (endTime) {
-      const end = new Date(endTime);
-      end.setHours(23, 59, 59, 999);
-      data = data.filter((item) => new Date(item.createdAt) <= end);
-    }
-
-    data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    const total = data.length;
-    const skip = (page - 1) * pageSize;
-    const list = data.slice(skip, skip + pageSize).map((user) => {
-      delete (user as any).password;
-      return user;
-    });
-
-    return { list, total, page, pageSize };
+    return {
+      list: result.list.map((user) => {
+        delete (user as any).password;
+        return user;
+      }),
+      total: result.total,
+      page: paginationDto.page,
+      pageSize: paginationDto.pageSize,
+    };
   }
 
   async findOne(id: number): Promise<User> {
-    const user = db.getUsers().find((u) => u.id === id);
+    const user = await this.userRepository.findOne({ where: { id } });
     if (!user) {
       throw new NotFoundException('用户不存在');
     }
@@ -82,8 +83,8 @@ export class UserService {
     return user;
   }
 
-  async findByUsername(username: string): Promise<User> {
-    return db.getUsers().find((u) => u.username === username);
+  async findByUsername(username: string): Promise<User | null> {
+    return this.userRepository.findOne({ where: { username } });
   }
 
   async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
@@ -95,14 +96,15 @@ export class UserService {
       updateData.password = await bcrypt.hash(updateUserDto.password, salt);
     }
 
-    const updated = db.updateUser(id, updateData);
+    await this.userRepository.update(id, updateData);
+    const updated = await this.userRepository.findOne({ where: { id } });
     delete (updated as any).password;
-    return updated;
+    return updated!;
   }
 
   async remove(id: number): Promise<void> {
-    const success = db.deleteUser(id);
-    if (!success) {
+    const result = await this.userRepository.delete(id);
+    if (result.affected === 0) {
       throw new NotFoundException('用户不存在');
     }
   }

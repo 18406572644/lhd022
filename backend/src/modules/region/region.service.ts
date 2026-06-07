@@ -1,54 +1,40 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { db, Region } from '@/common/database/in-memory-db';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Region } from '@/entities/region.entity';
 import { CreateRegionDto } from './dto/create-region.dto';
 import { UpdateRegionDto } from './dto/update-region.dto';
 import { PaginationDto, PaginationResultDto } from '@/common/dto/pagination.dto';
+import { QueryUtil } from '@/common/utils/query.util';
 
 @Injectable()
 export class RegionService {
+  constructor(
+    @InjectRepository(Region) private regionRepository: Repository<Region>,
+  ) {}
+
   async create(createRegionDto: CreateRegionDto): Promise<Region> {
-    return db.addRegion({
+    const regionData = {
       ...createRegionDto,
       parentId: createRegionDto.parentId || 0,
       level: createRegionDto.level || 1,
       sort: createRegionDto.sort || 0,
-    });
+    };
+    const region = this.regionRepository.create(regionData);
+    return this.regionRepository.save(region);
   }
 
   async findAll(paginationDto: PaginationDto): Promise<PaginationResultDto<Region>> {
-    const { page = 1, pageSize = 10, keyword, startTime, endTime } = paginationDto;
-
-    let data = [...db.getRegions()];
-
-    if (keyword) {
-      const kw = keyword.toLowerCase();
-      data = data.filter((item) => item.name.toLowerCase().includes(kw));
-    }
-
-    if (startTime) {
-      const start = new Date(startTime);
-      data = data.filter((item) => new Date(item.createdAt) >= start);
-    }
-
-    if (endTime) {
-      const end = new Date(endTime);
-      end.setHours(23, 59, 59, 999);
-      data = data.filter((item) => new Date(item.createdAt) <= end);
-    }
-
-    data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    const total = data.length;
-    const skip = (page - 1) * pageSize;
-    const list = data.slice(skip, skip + pageSize);
-
-    return { list, total, page, pageSize };
+    return QueryUtil.findWithPagination<Region>(
+      this.regionRepository,
+      paginationDto,
+      ['name'],
+    );
   }
 
   async findTree(): Promise<Region[]> {
-    const regions = [...db.getRegions()].sort((a, b) => {
-      if (a.sort !== b.sort) return a.sort - b.sort;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    const regions = await this.regionRepository.find({
+      order: { sort: 'ASC', createdAt: 'DESC' },
     });
     return this.buildTree(regions);
   }
@@ -68,7 +54,7 @@ export class RegionService {
   }
 
   async findOne(id: number): Promise<Region> {
-    const region = db.getRegions().find((r) => r.id === id);
+    const region = await this.regionRepository.findOne({ where: { id } });
     if (!region) {
       throw new NotFoundException('区域不存在');
     }
@@ -77,13 +63,13 @@ export class RegionService {
 
   async update(id: number, updateRegionDto: UpdateRegionDto): Promise<Region> {
     const region = await this.findOne(id);
-    const updated = db.updateRegion(id, updateRegionDto);
-    return updated;
+    await this.regionRepository.update(id, updateRegionDto);
+    return this.regionRepository.findOne({ where: { id } }) as Promise<Region>;
   }
 
   async remove(id: number): Promise<void> {
-    const success = db.deleteRegion(id);
-    if (!success) {
+    const result = await this.regionRepository.delete(id);
+    if (result.affected === 0) {
       throw new NotFoundException('区域不存在');
     }
   }
