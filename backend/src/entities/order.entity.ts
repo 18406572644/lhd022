@@ -28,7 +28,7 @@ export class Order {
   type: string;
 
   @ApiProperty({ description: '租借时间' })
-  @Column({ type: 'datetime' })
+  @Column({ type: 'datetime', nullable: true })
   rentTime: Date;
 
   @ApiProperty({ description: '归还时间' })
