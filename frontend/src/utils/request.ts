@@ -2,6 +2,25 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosR
 import { message } from 'antd'
 import { ApiResponse } from '../types'
 
+let lastRedirectTime = 0
+
+function clearAuthAndRedirect() {
+  const now = Date.now()
+  if (now - lastRedirectTime < 2000) {
+    return
+  }
+  lastRedirectTime = now
+
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+  localStorage.removeItem('user-storage')
+  localStorage.removeItem('persist:user-storage')
+
+  if (window.location.pathname !== '/login') {
+    window.location.href = '/login'
+  }
+}
+
 const service: AxiosInstance = axios.create({
   baseURL: '/api',
   timeout: 15000
@@ -27,9 +46,7 @@ service.interceptors.response.use(
     if (res.code !== 0 && res.code !== 200) {
       message.error(res.message || '请求失败')
       if (res.code === 401) {
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
-        window.location.href = '/login'
+        clearAuthAndRedirect()
       }
       return Promise.reject(new Error(res.message || '请求失败'))
     }
@@ -39,9 +56,7 @@ service.interceptors.response.use(
     const msg = error.response?.data?.message || error.message || '网络错误'
     message.error(msg)
     if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      window.location.href = '/login'
+      clearAuthAndRedirect()
     }
     return Promise.reject(error)
   }

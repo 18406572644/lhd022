@@ -9,12 +9,14 @@ interface AuthGuardProps {
 function AuthGuard({ children, requireAuth = true }: AuthGuardProps) {
   const user = useUserStore((state) => state.user)
   const location = useLocation()
+  const token = localStorage.getItem('token')
+  const isAuthenticated = !!token && !!user
 
-  if (requireAuth && !user) {
+  if (requireAuth && !isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
-  if (!requireAuth && user) {
+  if (!requireAuth && isAuthenticated) {
     return <Navigate to="/dashboard" replace />
   }
 
