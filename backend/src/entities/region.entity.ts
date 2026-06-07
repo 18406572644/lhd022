@@ -12,7 +12,7 @@ export class Region {
   name: string;
 
   @ApiProperty({ description: '父级区域ID' })
-  @Column({ default: 0 })
+  @Column({ name: 'parent_id', default: 0 })
   parentId: number;
 
   @ApiProperty({ description: '层级：1-省，2-市，3-区' })
@@ -24,10 +24,10 @@ export class Region {
   sort: number;
 
   @ApiProperty({ description: '创建时间' })
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
   @ApiProperty({ description: '更新时间' })
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

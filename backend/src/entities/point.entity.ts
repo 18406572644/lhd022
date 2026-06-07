@@ -24,7 +24,7 @@ export class Point {
   latitude: number;
 
   @ApiProperty({ description: '区域ID' })
-  @Column()
+  @Column({ name: 'region_id' })
   regionId: number;
 
   @ApiProperty({ description: '负责人' })
@@ -36,7 +36,7 @@ export class Point {
   phone: string;
 
   @ApiProperty({ description: '点位图片', type: 'array', items: { type: 'string' } })
-  @Column({ type: 'simple-array', nullable: true })
+  @Column({ name: 'images', type: 'simple-array', nullable: true })
   images: string[];
 
   @ApiProperty({ description: '状态：active-启用，inactive-禁用，maintenance-维护中' })
@@ -44,10 +44,10 @@ export class Point {
   status: string;
 
   @ApiProperty({ description: '创建时间' })
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
   @ApiProperty({ description: '更新时间' })
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

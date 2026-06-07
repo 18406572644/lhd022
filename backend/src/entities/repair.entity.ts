@@ -8,19 +8,19 @@ export class Repair {
   id: number;
 
   @ApiProperty({ description: '报修单号' })
-  @Column({ unique: true, length: 50 })
+  @Column({ name: 'repair_no', unique: true, length: 50 })
   repairNo: string;
 
   @ApiProperty({ description: '设备ID' })
-  @Column()
+  @Column({ name: 'device_id' })
   deviceId: number;
 
   @ApiProperty({ description: '点位ID' })
-  @Column()
+  @Column({ name: 'point_id' })
   pointId: number;
 
   @ApiProperty({ description: '故障类型' })
-  @Column({ length: 50 })
+  @Column({ name: 'fault_type', length: 50 })
   faultType: string;
 
   @ApiProperty({ description: '故障描述' })
@@ -28,7 +28,7 @@ export class Repair {
   description: string;
 
   @ApiProperty({ description: '故障图片', type: 'array', items: { type: 'string' } })
-  @Column({ type: 'simple-array', nullable: true })
+  @Column({ name: 'images', type: 'simple-array', nullable: true })
   images: string[];
 
   @ApiProperty({ description: '优先级：low-低，medium-中，high-高，urgent-紧急' })
@@ -48,18 +48,18 @@ export class Repair {
   handler: string;
 
   @ApiProperty({ description: '上报时间' })
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ name: 'report_time', type: 'datetime', nullable: true })
   reportTime: Date;
 
   @ApiProperty({ description: '解决时间' })
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ name: 'resolve_time', type: 'datetime', nullable: true })
   resolveTime: Date;
 
   @ApiProperty({ description: '创建时间' })
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
   @ApiProperty({ description: '更新时间' })
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

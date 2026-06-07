@@ -8,19 +8,19 @@ export class Order {
   id: number;
 
   @ApiProperty({ description: '订单号' })
-  @Column({ unique: true, length: 50 })
+  @Column({ name: 'order_no', unique: true, length: 50 })
   orderNo: string;
 
   @ApiProperty({ description: '用户ID' })
-  @Column({ length: 50 })
+  @Column({ name: 'user_id', length: 50 })
   userId: string;
 
   @ApiProperty({ description: '设备ID' })
-  @Column()
+  @Column({ name: 'device_id' })
   deviceId: number;
 
   @ApiProperty({ description: '点位ID' })
-  @Column()
+  @Column({ name: 'point_id' })
   pointId: number;
 
   @ApiProperty({ description: '类型：umbrella-雨伞，charger-充电宝' })
@@ -28,11 +28,11 @@ export class Order {
   type: string;
 
   @ApiProperty({ description: '租借时间' })
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ name: 'rent_time', type: 'datetime', nullable: true })
   rentTime: Date;
 
   @ApiProperty({ description: '归还时间' })
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ name: 'return_time', type: 'datetime', nullable: true })
   returnTime: Date;
 
   @ApiProperty({ description: '时长（分钟）' })
@@ -48,6 +48,6 @@ export class Order {
   status: string;
 
   @ApiProperty({ description: '创建时间' })
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

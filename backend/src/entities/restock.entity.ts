@@ -8,15 +8,15 @@ export class Restock {
   id: number;
 
   @ApiProperty({ description: '补货单号' })
-  @Column({ unique: true, length: 50 })
+  @Column({ name: 'restock_no', unique: true, length: 50 })
   restockNo: string;
 
   @ApiProperty({ description: '点位ID' })
-  @Column()
+  @Column({ name: 'point_id' })
   pointId: number;
 
   @ApiProperty({ description: '设备ID' })
-  @Column({ nullable: true })
+  @Column({ name: 'device_id', nullable: true })
   deviceId: number;
 
   @ApiProperty({ description: '类型：umbrella-雨伞，charger-充电宝' })
@@ -28,11 +28,11 @@ export class Restock {
   quantity: number;
 
   @ApiProperty({ description: '补货前库存' })
-  @Column()
+  @Column({ name: 'before_stock' })
   beforeStock: number;
 
   @ApiProperty({ description: '补货后库存' })
-  @Column()
+  @Column({ name: 'after_stock' })
   afterStock: number;
 
   @ApiProperty({ description: '操作人' })
@@ -40,7 +40,7 @@ export class Restock {
   operator: string;
 
   @ApiProperty({ description: '补货图片', type: 'array', items: { type: 'string' } })
-  @Column({ type: 'simple-array', nullable: true })
+  @Column({ name: 'images', type: 'simple-array', nullable: true })
   images: string[];
 
   @ApiProperty({ description: '备注' })
@@ -48,6 +48,6 @@ export class Restock {
   remark: string;
 
   @ApiProperty({ description: '创建时间' })
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

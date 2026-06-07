@@ -46,18 +46,24 @@ export class StatisticsService {
         this.orderRepository
           .createQueryBuilder('order')
           .select('COALESCE(SUM(order.amount), 0)', 'sum')
-          .where('order.createdAt >= :today', { today })
-          .andWhere('order.createdAt < :tomorrow', { tomorrow })
+          .where('order.created_at >= :today', { today })
+          .andWhere('order.created_at < :tomorrow', { tomorrow })
           .getRawOne()
           .then((res) => Number(res?.sum) || 0)
-          .catch(() => 0),
+          .catch((e) => {
+            this.logger.error('todayAmount error:', e);
+            return 0;
+          }),
         this.repairRepository.count({ where: { status: In(['pending', 'processing']) } }).catch(() => 0),
         this.deviceRepository
           .createQueryBuilder('device')
           .where('device.capacity > 0')
-          .andWhere('device.currentStock * 100 < device.capacity * 30')
+          .andWhere('device.current_stock * 100 < device.capacity * 30')
           .getCount()
-          .catch(() => 0),
+          .catch((e) => {
+            this.logger.error('lowStockDevices error:', e);
+            return 0;
+          }),
       ]);
 
       return {
