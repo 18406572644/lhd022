@@ -1,4 +1,7 @@
 import Dashboard from '../pages/Dashboard'
+import AdvancedAnalytics from '../pages/AdvancedAnalytics'
+import CustomDashboard from '../pages/CustomDashboard'
+import AlertCenter from '../pages/AlertCenter'
 import Points from '../pages/Points'
 import Devices from '../pages/Devices'
 import Repairs from '../pages/Repairs'
@@ -6,7 +9,7 @@ import Restocks from '../pages/Restocks'
 import Orders from '../pages/Orders'
 import Inventory from '../pages/Inventory'
 import Regions from '../pages/Regions'
-import { LayoutDashboard, MapPin, Monitor, Wrench, Package, ShoppingCart, ClipboardList, Layers } from 'lucide-react'
+import { LayoutDashboard, BarChart3, LayoutGrid, Bell, MapPin, Monitor, Wrench, Package, ShoppingCart, ClipboardList, Layers } from 'lucide-react'
 
 export interface RouteConfig {
   path: string
@@ -19,8 +22,26 @@ const routes: RouteConfig[] = [
   {
     path: '/dashboard',
     element: <Dashboard />,
-    label: '首页',
+    label: '基础看板',
     icon: <LayoutDashboard size={18} />
+  },
+  {
+    path: '/advanced-analytics',
+    element: <AdvancedAnalytics />,
+    label: '高级分析',
+    icon: <BarChart3 size={18} />
+  },
+  {
+    path: '/custom-dashboard',
+    element: <CustomDashboard />,
+    label: '自定义仪表盘',
+    icon: <LayoutGrid size={18} />
+  },
+  {
+    path: '/alert-center',
+    element: <AlertCenter />,
+    label: '预警中心',
+    icon: <Bell size={18} />
   },
   {
     path: '/points',

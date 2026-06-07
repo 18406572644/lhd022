@@ -11,6 +11,8 @@ import { RestockModule } from './modules/restock/restock.module';
 import { OrderModule } from './modules/order/order.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { StatisticsModule } from './modules/statistics/statistics.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { AlertModule } from './modules/alert/alert.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { SeedModule } from './common/seed/seed.module';
 
@@ -45,6 +47,8 @@ import { SeedModule } from './common/seed/seed.module';
     OrderModule,
     InventoryModule,
     StatisticsModule,
+    DashboardModule,
+    AlertModule,
     UploadModule,
     SeedModule,
   ],

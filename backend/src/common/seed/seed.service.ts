@@ -10,6 +10,8 @@ import { Order } from '@/entities/order.entity';
 import { Repair } from '@/entities/repair.entity';
 import { Restock } from '@/entities/restock.entity';
 import { Inventory } from '@/entities/inventory.entity';
+import { Dashboard } from '@/entities/dashboard.entity';
+import { AlertConfig } from '@/entities/alert-config.entity';
 
 @Injectable()
 export class SeedService implements OnModuleInit {
@@ -22,6 +24,8 @@ export class SeedService implements OnModuleInit {
     @InjectRepository(Repair) private repairRepository: Repository<Repair>,
     @InjectRepository(Restock) private restockRepository: Repository<Restock>,
     @InjectRepository(Inventory) private inventoryRepository: Repository<Inventory>,
+    @InjectRepository(Dashboard) private dashboardRepository: Repository<Dashboard>,
+    @InjectRepository(AlertConfig) private alertConfigRepository: Repository<AlertConfig>,
   ) {}
 
   async onModuleInit() {
@@ -36,6 +40,8 @@ export class SeedService implements OnModuleInit {
       await this.seedRepairs();
       await this.seedRestocks();
       await this.seedInventory();
+      await this.seedDashboards();
+      await this.seedAlertConfigs();
       console.log('测试数据初始化完成！');
     }
   }
@@ -147,5 +153,168 @@ export class SeedService implements OnModuleInit {
       { inventoryNo: 'INV20240601', deviceId: 3, pointId: 1, lossType: 'lost', reason: '充电宝丢失，追踪不到位置', handler: '张主管', images: [], handleMethod: 'scrap', status: 'pending', createdAt: new Date('2024-06-01') },
     ];
     await this.inventoryRepository.save(inventory);
+  }
+
+  private async seedDashboards() {
+    const dashboards: Partial<Dashboard>[] = [
+      {
+        name: '运营视图',
+        description: '展示订单、收入等运营核心指标',
+        userId: '1',
+        isPublic: true,
+        sort: 1,
+        status: 'active',
+        layout: [
+          { i: 'op-1', x: 0, y: 0, w: 6, h: 2 },
+          { i: 'op-2', x: 6, y: 0, w: 6, h: 2 },
+          { i: 'op-3', x: 12, y: 0, w: 6, h: 2 },
+          { i: 'op-4', x: 18, y: 0, w: 6, h: 2 },
+          { i: 'op-5', x: 0, y: 2, w: 12, h: 5 },
+          { i: 'op-6', x: 12, y: 2, w: 12, h: 5 },
+          { i: 'op-7', x: 0, y: 7, w: 24, h: 5 },
+        ],
+        widgets: [
+          { id: 'stat-total-points', instanceId: 'op-1', type: 'stat-card', title: '点位总数', dataKey: 'totalPoints', icon: 'EnvironmentOutlined', color: '#1890FF' },
+          { id: 'stat-total-devices', instanceId: 'op-2', type: 'stat-card', title: '设备总数', dataKey: 'totalDevices', icon: 'MonitorOutlined', color: '#722ED1' },
+          { id: 'stat-today-orders', instanceId: 'op-3', type: 'stat-card', title: '今日订单', dataKey: 'todayOrders', icon: 'ShoppingOutlined', color: '#FF7A45' },
+          { id: 'stat-today-amount', instanceId: 'op-4', type: 'stat-card', title: '今日收入', dataKey: 'todayAmount', icon: 'DollarOutlined', color: '#FAAD14', prefix: '¥' },
+          { id: 'chart-order-trend', instanceId: 'op-5', type: 'line', title: '订单趋势', dataSource: 'trend', height: 350 },
+          { id: 'chart-device-status', instanceId: 'op-6', type: 'pie', title: '设备状态分布', dataSource: 'device-status', height: 350 },
+          { id: 'chart-heatmap', instanceId: 'op-7', type: 'heatmap', title: '点位订单热力图', dataSource: 'heatmap', height: 400 },
+        ],
+      },
+      {
+        name: '运维视图',
+        description: '展示设备状态、故障处理等运维指标',
+        userId: '1',
+        isPublic: true,
+        sort: 2,
+        status: 'active',
+        layout: [
+          { i: 'mt-1', x: 0, y: 0, w: 6, h: 2 },
+          { i: 'mt-2', x: 6, y: 0, w: 6, h: 2 },
+          { i: 'mt-3', x: 12, y: 0, w: 6, h: 2 },
+          { i: 'mt-4', x: 18, y: 0, w: 6, h: 2 },
+          { i: 'mt-5', x: 0, y: 2, w: 12, h: 5 },
+          { i: 'mt-6', x: 12, y: 2, w: 12, h: 5 },
+          { i: 'mt-7', x: 0, y: 7, w: 12, h: 5 },
+          { i: 'mt-8', x: 12, y: 7, w: 12, h: 5 },
+        ],
+        widgets: [
+          { id: 'stat-total-devices', instanceId: 'mt-1', type: 'stat-card', title: '设备总数', dataKey: 'totalDevices', icon: 'MonitorOutlined', color: '#722ED1' },
+          { id: 'stat-online-devices', instanceId: 'mt-2', type: 'stat-card', title: '在线设备', dataKey: 'onlineDevices', icon: 'MonitorOutlined', color: '#52C41A' },
+          { id: 'stat-pending-repairs', instanceId: 'mt-3', type: 'stat-card', title: '待处理报修', dataKey: 'pendingRepairs', icon: 'WarningOutlined', color: '#F5222D' },
+          { id: 'stat-low-stock', instanceId: 'mt-4', type: 'stat-card', title: '低库存预警', dataKey: 'lowStockDevices', icon: 'WarningOutlined', color: '#F5222D' },
+          { id: 'chart-device-status', instanceId: 'mt-5', type: 'pie', title: '设备状态分布', dataSource: 'device-status', height: 350 },
+          { id: 'chart-sankey', instanceId: 'mt-6', type: 'sankey', title: '故障流转路径', dataSource: 'sankey', height: 400 },
+          { id: 'chart-radar', instanceId: 'mt-7', type: 'radar', title: '区域运维KPI', dataSource: 'radar', height: 350 },
+          { id: 'chart-funnel', instanceId: 'mt-8', type: 'funnel', title: '报修处理漏斗', dataSource: 'funnel', height: 350 },
+        ],
+      },
+      {
+        name: '管理视图',
+        description: '全方位展示各维度数据，供管理层使用',
+        userId: '1',
+        isPublic: false,
+        sort: 3,
+        status: 'active',
+        layout: [
+          { i: 'mg-1', x: 0, y: 0, w: 4, h: 2 },
+          { i: 'mg-2', x: 4, y: 0, w: 4, h: 2 },
+          { i: 'mg-3', x: 8, y: 0, w: 4, h: 2 },
+          { i: 'mg-4', x: 12, y: 0, w: 4, h: 2 },
+          { i: 'mg-5', x: 16, y: 0, w: 4, h: 2 },
+          { i: 'mg-6', x: 20, y: 0, w: 4, h: 2 },
+          { i: 'mg-7', x: 0, y: 2, w: 14, h: 5 },
+          { i: 'mg-8', x: 14, y: 2, w: 10, h: 5 },
+          { i: 'mg-9', x: 0, y: 7, w: 12, h: 5 },
+          { i: 'mg-10', x: 12, y: 7, w: 12, h: 5 },
+        ],
+        widgets: [
+          { id: 'stat-total-points', instanceId: 'mg-1', type: 'stat-card', title: '点位总数', dataKey: 'totalPoints', icon: 'EnvironmentOutlined', color: '#1890FF' },
+          { id: 'stat-total-devices', instanceId: 'mg-2', type: 'stat-card', title: '设备总数', dataKey: 'totalDevices', icon: 'MonitorOutlined', color: '#722ED1' },
+          { id: 'stat-online-devices', instanceId: 'mg-3', type: 'stat-card', title: '在线设备', dataKey: 'onlineDevices', icon: 'MonitorOutlined', color: '#52C41A' },
+          { id: 'stat-today-orders', instanceId: 'mg-4', type: 'stat-card', title: '今日订单', dataKey: 'todayOrders', icon: 'ShoppingOutlined', color: '#FF7A45' },
+          { id: 'stat-today-amount', instanceId: 'mg-5', type: 'stat-card', title: '今日收入', dataKey: 'todayAmount', icon: 'DollarOutlined', color: '#FAAD14', prefix: '¥' },
+          { id: 'stat-pending-repairs', instanceId: 'mg-6', type: 'stat-card', title: '待处理报修', dataKey: 'pendingRepairs', icon: 'WarningOutlined', color: '#F5222D' },
+          { id: 'chart-order-trend', instanceId: 'mg-7', type: 'line', title: '订单趋势', dataSource: 'trend', height: 350 },
+          { id: 'chart-heatmap', instanceId: 'mg-8', type: 'heatmap', title: '点位订单热力图', dataSource: 'heatmap', height: 400 },
+          { id: 'chart-radar', instanceId: 'mg-9', type: 'radar', title: '区域运维KPI', dataSource: 'radar', height: 350 },
+          { id: 'chart-region-data', instanceId: 'mg-10', type: 'bar', title: '区域数据对比', dataSource: 'region-data', height: 350 },
+        ],
+      },
+    ];
+    await this.dashboardRepository.save(dashboards);
+  }
+
+  private async seedAlertConfigs() {
+    const alertConfigs: Partial<AlertConfig>[] = [
+      {
+        name: '设备在线率预警',
+        metricType: 'device_online_rate',
+        operator: 'lt',
+        threshold: 90,
+        level: 'high',
+        notifyChannels: ['system', 'email'],
+        receivers: ['1', '2'],
+        checkInterval: 60,
+        silenceDuration: 120,
+        isEnabled: true,
+        createdBy: '1',
+      },
+      {
+        name: '低库存预警',
+        metricType: 'low_stock',
+        operator: 'gt',
+        threshold: 3,
+        level: 'medium',
+        notifyChannels: ['system'],
+        receivers: ['1'],
+        checkInterval: 120,
+        silenceDuration: 180,
+        isEnabled: true,
+        createdBy: '1',
+      },
+      {
+        name: '待处理报修预警',
+        metricType: 'pending_repair',
+        operator: 'gt',
+        threshold: 5,
+        level: 'urgent',
+        notifyChannels: ['system', 'email'],
+        receivers: ['1', '2', '3'],
+        checkInterval: 30,
+        silenceDuration: 60,
+        isEnabled: true,
+        createdBy: '1',
+      },
+      {
+        name: '离线设备预警',
+        metricType: 'offline_devices',
+        operator: 'gt',
+        threshold: 2,
+        level: 'high',
+        notifyChannels: ['system'],
+        receivers: ['1', '3'],
+        checkInterval: 60,
+        silenceDuration: 120,
+        isEnabled: true,
+        createdBy: '1',
+      },
+      {
+        name: '故障设备预警',
+        metricType: 'fault_devices',
+        operator: 'gt',
+        threshold: 1,
+        level: 'medium',
+        notifyChannels: ['system'],
+        receivers: ['3'],
+        checkInterval: 60,
+        silenceDuration: 120,
+        isEnabled: false,
+        createdBy: '1',
+      },
+    ];
+    await this.alertConfigRepository.save(alertConfigs);
   }
 }
